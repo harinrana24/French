@@ -8,6 +8,7 @@
     table { border-collapse: collapse; width: 50%; margin-bottom: 20px; }
     th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
     th { background-color: #f2f2f2; }
+    tr.highlight { background-color: #ffff99; }
   </style>
 </head>
 <body>
@@ -46,27 +47,46 @@
         tbody.appendChild(tr);
       });
 
-      // Speak each pair with 2-second pause
+      // Speak each pair with 2-second wait
       const synth = window.speechSynthesis;
       const voices = synth.getVoices();
       const frenchVoice = voices.find(v => v.lang.startsWith("fr")) || voices[0];
       const englishVoice = voices.find(v => v.lang.startsWith("en")) || voices[0];
 
-      vocab.forEach((item, i) => {
-        setTimeout(() => {
-          const frenchUtter = new SpeechSynthesisUtterance(item.french);
-          frenchUtter.lang = "fr-FR";
-          frenchUtter.voice = frenchVoice;
-          synth.speak(frenchUtter);
+      let index = 0;
+      function speakNext() {
+        if(index >= vocab.length) return;
 
-          frenchUtter.onend = () => {
-            const englishUtter = new SpeechSynthesisUtterance(item.english);
-            englishUtter.lang = "en-US";
-            englishUtter.voice = englishVoice;
-            synth.speak(englishUtter);
+        // Highlight row
+        const rows = document.querySelectorAll("#vocabTable tbody tr");
+        rows.forEach(r => r.classList.remove("highlight"));
+        rows[index].classList.add("highlight");
+
+        // Speak French
+        const frenchUtter = new SpeechSynthesisUtterance(vocab[index].french);
+        frenchUtter.lang = "fr-FR";
+        frenchUtter.voice = frenchVoice;
+
+        frenchUtter.onend = () => {
+          // Speak English
+          const englishUtter = new SpeechSynthesisUtterance(vocab[index].english);
+          englishUtter.lang = "en-US";
+          englishUtter.voice = englishVoice;
+
+          englishUtter.onend = () => {
+            // Wait 2 seconds before next
+            setTimeout(() => {
+              index++;
+              speakNext();
+            }, 2000);
           };
-        }, i * 2000); // starts each pair every 2 seconds
-      });
+          synth.speak(englishUtter);
+        };
+
+        synth.speak(frenchUtter);
+      }
+
+      speakNext();
     }
   </script>
 </body>
