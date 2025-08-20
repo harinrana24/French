@@ -4,34 +4,150 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>French Vocab Speaker</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background: #f9f9f9;
+      color: #333;
+    }
+
+    h1 {
+      color: #4CAF50;
+      margin-top: 20px;
+    }
+
+    button {
+      padding: 8px 15px;
+      margin: 10px 0;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+
+    button:hover {
+      background-color: #45a049;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 70%;
+      margin: 20px auto;
+      background-color: #fff;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+
+    th, td {
+      border: 1px solid #ddd;
+      padding: 10px;
+      text-align: center;
+    }
+
+    th {
+      background-color: #4CAF50;
+      color: white;
+    }
+
+    tr:nth-child(even) { background-color: #f2f2f2; }
+
+    tr.highlight { background-color: #ffeb3b !important; }
+  </style>
 </head>
 <body>
-  <h2>French Vocab Speaker</h2>
-  <button onclick="fetchAndSpeak()">Speak French Words</button>
+  <h1>Vocab List</h1>
+  <button id="speakAllBtn">Speak All</button>
+  <table id="vocabTable">
+    <thead>
+      <tr>
+        <th>Action</th>
+        <th>French</th>
+        <th>English</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
 
   <script>
-    async function fetchAndSpeak() {
-      const sheetId = "1whwTQDubf_im8SBxQGvI3diuAdWKwo5CYZwmpDNobEI"; // Your Google Sheet ID
+    let vocab = [];
+
+    async function loadVocab() {
+      const sheetId = "1whwTQDubf_im8SBxQGvI3diuAdWKwo5CYZwmpDNobEI"; // Google Sheet ID
       const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv`;
 
       const res = await fetch(url);
       const text = await res.text();
+      const rows = text.split("\n").slice(1); // skip header
 
-      const rows = text.split("\n").slice(1); // Skip header row
-      const words = rows.map(row => row.split(",")[0].replace(/"/g, "")).filter(Boolean);
+      vocab = rows.map(row => {
+        const cols = row.split(",").map(c => c.replace(/"/g, ""));
+        return { french: cols[0], english: cols[1] };
+      }).filter(item => item.french && item.english);
+
+      const tbody = document.querySelector("#vocabTable tbody");
+      tbody.innerHTML = "";
 
       const synth = window.speechSynthesis;
       const voices = synth.getVoices();
       const frenchVoice = voices.find(v => v.lang.startsWith("fr")) || voices[0];
+      const englishVoice = voices.find(v => v.lang.startsWith("en")) || voices[0];
 
-      words.forEach((word, i) => {
-        setTimeout(() => {
-          const utter = new SpeechSynthesisUtterance(word);
-          utter.lang = "fr-FR";
-          utter.voice = frenchVoice;
-          synth.speak(utter);
-        }, i * 1500); // 1.5 seconds between words
+      vocab.forEach(item => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td><button>Speak</button></td>
+          <td>${item.french}</td>
+          <td>${item.english}</td>
+        `;
+        const button = tr.querySelector("button");
+        button.onclick = () => {
+          speakPair(item.french, item.english, tr);
+        };
+        tbody.appendChild(tr);
       });
+    }
+
+    function speakPair(french, english, row=null) {
+      const synth = window.speechSynthesis;
+      const voices = synth.getVoices();
+      const frenchVoice = voices.find(v => v.lang.startsWith("fr")) || voices[0];
+      const englishVoice = voices.find(v => v.lang.startsWith("en")) || voices[0];
+
+      if(row) {
+        document.querySelectorAll("#vocabTable tbody tr").forEach(r => r.classList.remove("highlight"));
+        row.classList.add("highlight");
+      }
+
+      const frenchUtter = new SpeechSynthesisUtterance(french);
+      frenchUtter.lang = "fr-FR";
+      frenchUtter.voice = frenchVoice;
+
+      frenchUtter.onend = () => {
+        const englishUtter = new SpeechSynthesisUtterance(english);
+        englishUtter.lang = "en-US";
+        englishUtter.voice = englishVoice;
+        synth.speak(englishUtter);
+      };
+
+      synth.speak(frenchUtter);
+    }
+
+    async function speakAll() {
+      for(let i=0; i<vocab.length; i++) {
+        const row = document.querySelectorAll("#vocabTable tbody tr")[i];
+        speakPair(vocab[i].french, vocab[i].english, row);
+        await new Promise(resolve => setTimeout(resolve, 3000)); // 3 sec per pair
+      }
+    }
+
+    document.getElementById("speakAllBtn").onclick = speakAll;
+
+    if (typeof speechSynthesis !== 'undefined' && speechSynthesis.onvoiceschanged !== undefined) {
+      speechSynthesis.onvoiceschanged = loadVocab;
+    } else {
+      loadVocab();
     }
   </script>
 </body>
