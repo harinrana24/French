@@ -8,24 +8,26 @@
     body {
       font-family: Arial, sans-serif;
       text-align: center;
-      background: #f9f9f9;
+      background: #f0f8ff;
       color: #333;
+      margin: 0;
+      padding: 10px;
     }
 
     h1 {
       color: #4CAF50;
-      margin-top: 20px;
+      margin: 20px 0;
     }
 
     button {
-      padding: 8px 15px;
+      padding: 12px 20px;
       margin: 10px 0;
       background-color: #4CAF50;
       color: white;
       border: none;
-      border-radius: 5px;
+      border-radius: 8px;
       cursor: pointer;
-      font-size: 16px;
+      font-size: 18px;
     }
 
     button:hover {
@@ -34,26 +36,34 @@
 
     table {
       border-collapse: collapse;
-      width: 70%;
+      width: 95%;
+      max-width: 700px;
       margin: 20px auto;
       background-color: #fff;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      box-shadow: 0 3px 8px rgba(0,0,0,0.15);
+      font-size: 18px;
     }
 
     th, td {
       border: 1px solid #ddd;
-      padding: 10px;
+      padding: 12px;
       text-align: center;
     }
 
     th {
       background-color: #4CAF50;
       color: white;
+      font-size: 18px;
     }
 
-    tr:nth-child(even) { background-color: #f2f2f2; }
+    tr:nth-child(even) { background-color: #f9f9f9; }
 
     tr.highlight { background-color: #ffeb3b !important; }
+
+    @media (max-width: 600px) {
+      th, td { font-size: 16px; padding: 10px; }
+      button { font-size: 16px; padding: 10px 16px; }
+    }
   </style>
 </head>
 <body>
@@ -102,9 +112,7 @@
           <td>${item.english}</td>
         `;
         const button = tr.querySelector("button");
-        button.onclick = () => {
-          speakPair(item.french, item.english, tr);
-        };
+        button.onclick = () => speakPair(item.french, item.english, tr);
         tbody.appendChild(tr);
       });
     }
@@ -138,7 +146,13 @@
       for(let i=0; i<vocab.length; i++) {
         const row = document.querySelectorAll("#vocabTable tbody tr")[i];
         speakPair(vocab[i].french, vocab[i].english, row);
-        await new Promise(resolve => setTimeout(resolve, 3000)); // 3 sec per pair
+
+        // Calculate pause: 1 sec per word length + 1.5 sec buffer
+        const frenchLength = vocab[i].french.split(" ").length;
+        const englishLength = vocab[i].english.split(" ").length;
+        const pauseTime = (frenchLength + englishLength) * 700 + 1500; // milliseconds
+
+        await new Promise(resolve => setTimeout(resolve, pauseTime));
       }
     }
 
