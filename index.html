@@ -1,168 +1,113 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>French Vocab Speaker</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      text-align: center;
-      background: #f0f8ff;
-      color: #333;
-      margin: 0;
-      padding: 10px;
-    }
-
-    h1 {
-      color: #4CAF50;
-      margin: 20px 0;
-    }
-
-    button {
-      padding: 12px 20px;
-      margin: 10px 0;
-      background-color: #4CAF50;
-      color: white;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 18px;
-    }
-
-    button:hover {
-      background-color: #45a049;
-    }
-
-    table {
-      border-collapse: collapse;
-      width: 95%;
-      max-width: 700px;
-      margin: 20px auto;
-      background-color: #fff;
-      box-shadow: 0 3px 8px rgba(0,0,0,0.15);
-      font-size: 18px;
-    }
-
-    th, td {
-      border: 1px solid #ddd;
-      padding: 12px;
-      text-align: center;
-    }
-
-    th {
-      background-color: #4CAF50;
-      color: white;
-      font-size: 18px;
-    }
-
-    tr:nth-child(even) { background-color: #f9f9f9; }
-
-    tr.highlight { background-color: #ffeb3b !important; }
-
-    @media (max-width: 600px) {
-      th, td { font-size: 16px; padding: 10px; }
-      button { font-size: 16px; padding: 10px 16px; }
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>French Vocab Speaker</title>
+<style>
+  body { font-family: Arial; text-align:center; background:#f0f8ff; color:#333; padding:10px; }
+  h1 { color:#4CAF50; margin:20px 0; }
+  button { padding:14px 20px; margin:10px 0; background:#4CAF50; color:white; border:none; border-radius:8px; font-size:18px; cursor:pointer;}
+  button:hover { background:#45a049; }
+  table { border-collapse:collapse; width:95%; max-width:700px; margin:20px auto; background:white; box-shadow:0 3px 8px rgba(0,0,0,0.15); font-size:18px;}
+  th, td { border:1px solid #ddd; padding:12px; text-align:center;}
+  th { background:#4CAF50; color:white; }
+  tr:nth-child(even){background:#f9f9f9;}
+  tr.highlight { background:#ffeb3b !important; }
+  @media(max-width:600px){ th, td{font-size:16px; padding:10px;} button{font-size:16px; padding:12px 16px;} }
+</style>
 </head>
 <body>
-  <h1>Vocab List</h1>
-  <button id="speakAllBtn">Speak All</button>
-  <table id="vocabTable">
-    <thead>
-      <tr>
-        <th>Action</th>
-        <th>French</th>
-        <th>English</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
+<h1>Vocab List</h1>
+<button id="speakAllBtn">Speak All</button>
+<table id="vocabTable">
+<thead><tr><th>Action</th><th>French</th><th>English</th></tr></thead>
+<tbody></tbody>
+</table>
 
-  <script>
-    let vocab = [];
+<script>
+let vocab = [];
+let voicesReady = false;
 
-    async function loadVocab() {
-      const sheetId = "1whwTQDubf_im8SBxQGvI3diuAdWKwo5CYZwmpDNobEI"; // Google Sheet ID
-      const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv`;
+async function loadVocab() {
+  const sheetId = "1whwTQDubf_im8SBxQGvI3diuAdWKwo5CYZwmpDNobEI";
+  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv`;
 
-      const res = await fetch(url);
-      const text = await res.text();
-      const rows = text.split("\n").slice(1); // skip header
+  try {
+    const res = await fetch(url);
+    const text = await res.text();
+    const rows = text.split("\n").slice(1);
+    vocab = rows.map(row => {
+      const cols = row.split(",").map(c => c.replace(/"/g,""));
+      return { french: cols[0], english: cols[1] };
+    }).filter(item => item.french && item.english);
 
-      vocab = rows.map(row => {
-        const cols = row.split(",").map(c => c.replace(/"/g, ""));
-        return { french: cols[0], english: cols[1] };
-      }).filter(item => item.french && item.english);
+    const tbody = document.querySelector("#vocabTable tbody");
+    tbody.innerHTML = "";
 
-      const tbody = document.querySelector("#vocabTable tbody");
-      tbody.innerHTML = "";
+    vocab.forEach(item => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td><button>Speak</button></td><td>${item.french}</td><td>${item.english}</td>`;
+      const button = tr.querySelector("button");
+      button.onclick = () => speakPair(item.french,item.english,tr);
+      tbody.appendChild(tr);
+    });
+  } catch(err){
+    alert("Error loading Google Sheet. Make sure the sheet is public.");
+  }
+}
 
-      const synth = window.speechSynthesis;
-      const voices = synth.getVoices();
-      const frenchVoice = voices.find(v => v.lang.startsWith("fr")) || voices[0];
-      const englishVoice = voices.find(v => v.lang.startsWith("en")) || voices[0];
-
-      vocab.forEach(item => {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td><button>Speak</button></td>
-          <td>${item.french}</td>
-          <td>${item.english}</td>
-        `;
-        const button = tr.querySelector("button");
-        button.onclick = () => speakPair(item.french, item.english, tr);
-        tbody.appendChild(tr);
-      });
+function getVoices() {
+  return new Promise(resolve => {
+    let voices = speechSynthesis.getVoices();
+    if(voices.length) resolve(voices);
+    else {
+      speechSynthesis.onvoiceschanged = () => resolve(speechSynthesis.getVoices());
     }
+  });
+}
 
-    function speakPair(french, english, row=null) {
-      const synth = window.speechSynthesis;
-      const voices = synth.getVoices();
-      const frenchVoice = voices.find(v => v.lang.startsWith("fr")) || voices[0];
-      const englishVoice = voices.find(v => v.lang.startsWith("en")) || voices[0];
+async function speakPair(french, english, row=null) {
+  if(!voicesReady) {
+    voices = await getVoices();
+    voicesReady = true;
+  }
+  const synth = window.speechSynthesis;
+  const voices = synth.getVoices();
+  const frenchVoice = voices.find(v=>v.lang.startsWith("fr"))||voices[0];
+  const englishVoice = voices.find(v=>v.lang.startsWith("en"))||voices[0];
 
-      if(row) {
-        document.querySelectorAll("#vocabTable tbody tr").forEach(r => r.classList.remove("highlight"));
-        row.classList.add("highlight");
-      }
+  if(row){
+    document.querySelectorAll("#vocabTable tbody tr").forEach(r=>r.classList.remove("highlight"));
+    row.classList.add("highlight");
+  }
 
-      const frenchUtter = new SpeechSynthesisUtterance(french);
-      frenchUtter.lang = "fr-FR";
-      frenchUtter.voice = frenchVoice;
+  const frenchUtter = new SpeechSynthesisUtterance(french);
+  frenchUtter.lang="fr-FR"; frenchUtter.voice=frenchVoice;
+  frenchUtter.onend = ()=>{ 
+    const englishUtter = new SpeechSynthesisUtterance(english);
+    englishUtter.lang="en-US"; englishUtter.voice=englishVoice;
+    synth.speak(englishUtter);
+  };
+  synth.speak(frenchUtter);
+}
 
-      frenchUtter.onend = () => {
-        const englishUtter = new SpeechSynthesisUtterance(english);
-        englishUtter.lang = "en-US";
-        englishUtter.voice = englishVoice;
-        synth.speak(englishUtter);
-      };
+async function speakAll() {
+  for(let i=0;i<vocab.length;i++){
+    const row = document.querySelectorAll("#vocabTable tbody tr")[i];
+    speakPair(vocab[i].french,vocab[i].english,row);
 
-      synth.speak(frenchUtter);
-    }
+    // dynamic pause: 700ms per word + buffer
+    const frenchWords=vocab[i].french.split(" ").length;
+    const englishWords=vocab[i].english.split(" ").length;
+    const pauseTime=(frenchWords+englishWords)*700+1500;
+    await new Promise(resolve=>setTimeout(resolve,pauseTime));
+  }
+}
 
-    async function speakAll() {
-      for(let i=0; i<vocab.length; i++) {
-        const row = document.querySelectorAll("#vocabTable tbody tr")[i];
-        speakPair(vocab[i].french, vocab[i].english, row);
+document.getElementById("speakAllBtn").onclick = speakAll;
 
-        // Calculate pause: 1 sec per word length + 1.5 sec buffer
-        const frenchLength = vocab[i].french.split(" ").length;
-        const englishLength = vocab[i].english.split(" ").length;
-        const pauseTime = (frenchLength + englishLength) * 700 + 1500; // milliseconds
-
-        await new Promise(resolve => setTimeout(resolve, pauseTime));
-      }
-    }
-
-    document.getElementById("speakAllBtn").onclick = speakAll;
-
-    if (typeof speechSynthesis !== 'undefined' && speechSynthesis.onvoiceschanged !== undefined) {
-      speechSynthesis.onvoiceschanged = loadVocab;
-    } else {
-      loadVocab();
-    }
-  </script>
+loadVocab();
+</script>
 </body>
 </html>
