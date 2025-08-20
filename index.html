@@ -69,8 +69,12 @@ async function speakPair(french, english, row=null) {
   if(voices.length === 0) voices = await getVoices();
 
   const synth = window.speechSynthesis;
-  const frenchVoice = voices.find(v=>v.lang.startsWith("fr"))||voices[0];
-  const englishVoice = voices.find(v=>v.lang.startsWith("en"))||voices[0];
+
+  // Pick a real French voice
+  const frenchVoice = voices.find(v=>v.lang.startsWith("fr") && v.name.toLowerCase().includes("fr")) 
+                      || voices.find(v=>v.lang.startsWith("fr")) 
+                      || voices[0];
+  const englishVoice = voices.find(v=>v.lang.startsWith("en")) || voices[0];
 
   if(row){
     document.querySelectorAll("#vocabTable tbody tr").forEach(r=>r.classList.remove("highlight"));
@@ -101,6 +105,9 @@ async function speakAll() {
     await new Promise(resolve=>setTimeout(resolve,pauseTime));
   }
 }
+
+// Optional: log all voices to see what's available
+// speechSynthesis.getVoices().forEach(v=>console.log(v.name, v.lang));
 
 document.getElementById("speakAllBtn").onclick = speakAll;
 
