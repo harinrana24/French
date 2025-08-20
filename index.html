@@ -5,18 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>French Vocab Speaker</title>
   <style>
-    table { border-collapse: collapse; width: 50%; margin-bottom: 20px; }
+    table { border-collapse: collapse; width: 60%; margin-bottom: 20px; }
     th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
     th { background-color: #f2f2f2; }
-    tr.highlight { background-color: #ffff99; }
+    button { padding: 5px 10px; }
   </style>
 </head>
 <body>
   <h2>French Vocab Speaker</h2>
-  <button onclick="fetchAndSpeak()">Speak Vocab</button>
   <table id="vocabTable">
     <thead>
       <tr>
+        <th>Action</th>
         <th>French</th>
         <th>English</th>
       </tr>
@@ -25,68 +25,58 @@
   </table>
 
   <script>
-    async function fetchAndSpeak() {
-      const sheetId = "1whwTQDubf_im8SBxQGvI3diuAdWKwo5CYZwmpDNobEI"; // Your Google Sheet ID
+    async function loadVocab() {
+      const sheetId = "1whwTQDubf_im8SBxQGvI3diuAdWKwo5CYZwmpDNobEI"; // Google Sheet ID
       const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv`;
 
       const res = await fetch(url);
       const text = await res.text();
-      const rows = text.split("\n").slice(1); // skip header row
+      const rows = text.split("\n").slice(1); // skip header
 
       const vocab = rows.map(row => {
         const cols = row.split(",").map(c => c.replace(/"/g, ""));
         return { french: cols[0], english: cols[1] };
       }).filter(item => item.french && item.english);
 
-      // Display in table
       const tbody = document.querySelector("#vocabTable tbody");
       tbody.innerHTML = "";
-      vocab.forEach(item => {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `<td>${item.french}</td><td>${item.english}</td>`;
-        tbody.appendChild(tr);
-      });
 
-      // Speak each pair with 2-second wait
       const synth = window.speechSynthesis;
       const voices = synth.getVoices();
       const frenchVoice = voices.find(v => v.lang.startsWith("fr")) || voices[0];
       const englishVoice = voices.find(v => v.lang.startsWith("en")) || voices[0];
 
-      let index = 0;
-      function speakNext() {
-        if(index >= vocab.length) return;
+      vocab.forEach(item => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td><button>Speak</button></td>
+          <td>${item.french}</td>
+          <td>${item.english}</td>
+        `;
+        const button = tr.querySelector("button");
+        button.onclick = () => {
+          const frenchUtter = new SpeechSynthesisUtterance(item.french);
+          frenchUtter.lang = "fr-FR";
+          frenchUtter.voice = frenchVoice;
 
-        // Highlight row
-        const rows = document.querySelectorAll("#vocabTable tbody tr");
-        rows.forEach(r => r.classList.remove("highlight"));
-        rows[index].classList.add("highlight");
-
-        // Speak French
-        const frenchUtter = new SpeechSynthesisUtterance(vocab[index].french);
-        frenchUtter.lang = "fr-FR";
-        frenchUtter.voice = frenchVoice;
-
-        frenchUtter.onend = () => {
-          // Speak English
-          const englishUtter = new SpeechSynthesisUtterance(vocab[index].english);
-          englishUtter.lang = "en-US";
-          englishUtter.voice = englishVoice;
-
-          englishUtter.onend = () => {
-            // Wait 2 seconds before next
-            setTimeout(() => {
-              index++;
-              speakNext();
-            }, 2000);
+          frenchUtter.onend = () => {
+            const englishUtter = new SpeechSynthesisUtterance(item.english);
+            englishUtter.lang = "en-US";
+            englishUtter.voice = englishVoice;
+            synth.speak(englishUtter);
           };
-          synth.speak(englishUtter);
+
+          synth.speak(frenchUtter);
         };
+        tbody.appendChild(tr);
+      });
+    }
 
-        synth.speak(frenchUtter);
-      }
-
-      speakNext();
+    // Load voices properly
+    if (typeof speechSynthesis !== 'undefined' && speechSynthesis.onvoiceschanged !== undefined) {
+      speechSynthesis.onvoiceschanged = loadVocab;
+    } else {
+      loadVocab();
     }
   </script>
 </body>
