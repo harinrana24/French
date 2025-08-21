@@ -2,24 +2,58 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Vocab List with Speech</title>
+  <title>Vocab List</title>
   <style>
-    body { font-family: Arial, sans-serif; text-align: center; padding: 20px; background: #f0f4f8; }
-    h1 { color: #2a4d8f; margin-bottom: 20px; }
-    table { margin: auto; border-collapse: collapse; width: 80%; max-width: 800px; }
-    th, td { border: 1px solid #ccc; padding: 12px; text-align: center; font-size: 18px; }
-    th { background: #4CAF50; color: white; }
-    tr.highlight { background: #fffa8b; }
-    button { padding: 6px 12px; margin: 2px; border: none; border-radius: 6px; cursor: pointer; }
-    .speak-btn { background: #2196F3; color: white; }
-    .speak-all-btn { background: #FF5722; color: white; margin: 15px; font-size: 16px; }
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 20px;
+      background: #f4f8fb;
+    }
+    h1 {
+      color: #2c3e50;
+      margin-bottom: 20px;
+    }
+    table {
+      margin: auto;
+      border-collapse: collapse;
+      width: 90%;
+      max-width: 800px;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 12px;
+      text-align: center;
+    }
+    th {
+      background: #3498db;
+      color: white;
+    }
+    tr.highlight {
+      background: #f9e79f !important;
+    }
+    button {
+      background: #3498db;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    button:hover {
+      background: #2980b9;
+    }
+    #speakAllBtn {
+      margin-bottom: 20px;
+      font-size: 16px;
+      padding: 12px 20px;
+    }
   </style>
 </head>
 <body>
-  <h1>📘 Vocab List</h1>
-
-  <button class="speak-all-btn" onclick="speakAll()">🔊 Speak All</button>
-
+  <h1>Vocab List</h1>
+  <button id="speakAllBtn">🔊 Speak All</button>
   <table id="vocabTable">
     <thead>
       <tr>
@@ -28,72 +62,78 @@
         <th>Action</th>
       </tr>
     </thead>
-    <tbody></tbody>
+    <tbody>
+      <!-- Rows will be filled dynamically -->
+    </tbody>
   </table>
 
   <script>
-    const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/1whwTQDubf_im8SBxQGvI3diuAdWKwo5CYZwmpDNobEI/export?format=csv";
+    // Fetch data from Google Sheets (using CSV export)
+    const sheetURL = "https://docs.google.com/spreadsheets/d/1whwTQDubf_im8SBxQGvI3diuAdWKwo5CYZwmpDNobEI/export?format=csv";
 
-    // Load vocab from sheet
-    fetch(SHEET_CSV_URL)
+    const tableBody = document.querySelector("#vocabTable tbody");
+
+    // Load and display sheet data
+    fetch(sheetURL)
       .then(res => res.text())
-      .then(data => {
-        const tbody = document.querySelector("#vocabTable tbody");
-        const lines = data.split("\n");
-        lines.forEach(line => {
-          const [french, english] = line.split(",");
-          if(french && english){
+      .then(csv => {
+        const rows = csv.split("\n").map(r => r.split(","));
+        rows.forEach((row, index) => {
+          if (row.length >= 2 && index > 0) { // skip header
+            const [french, english] = row;
             const tr = document.createElement("tr");
             tr.innerHTML = `
-              <td class="french">${french.trim()}</td>
-              <td>${english.trim()}</td>
-              <td><button class="speak-btn" onclick="speakWord('${french.trim()}')">🔊 Speak</button></td>
+              <td>${french}</td>
+              <td>${english}</td>
+              <td><button onclick="speakWord('${french}')">🔊 Speak</button></td>
             `;
-            tbody.appendChild(tr);
+            tableBody.appendChild(tr);
           }
         });
-      })
-      .catch(err => console.error("Error fetching CSV:", err));
+      });
 
-    // Speak one French word
-    function speakWord(word){
-      const utterance = new SpeechSynthesisUtterance(word);
-      utterance.lang = "fr-FR"; // French voice
-      speechSynthesis.speak(utterance);
+    // Speak a single French word
+    function speakWord(word) {
+      let utter = new SpeechSynthesisUtterance(word);
+      utter.lang = "fr-FR"; // French voice
+      speechSynthesis.speak(utter);
     }
 
-    // Speak all French words in order, highlighting each row
-    function speakAll(){
-      const rows = document.querySelectorAll("#vocabTable tbody tr");
+    // Speak all words (French + English) with highlight
+    document.getElementById("speakAllBtn").addEventListener("click", () => {
+      const rows = tableBody.querySelectorAll("tr");
       let i = 0;
 
-      function speakNext(){
-        if(i < rows.length){
-          // clear highlights
-          rows.forEach(r => r.classList.remove("highlight"));
-          // highlight current
-          rows[i].classList.add("highlight");
+      function speakNext() {
+        if (i >= rows.length) return;
 
-          const frenchWord = rows[i].querySelector(".french").innerText;
-          const utterance = new SpeechSynthesisUtterance(frenchWord);
-          utterance.lang = "fr-FR";
+        // Highlight current row
+        rows.forEach(r => r.classList.remove("highlight"));
+        rows[i].classList.add("highlight");
 
-          utterance.onend = () => {
+        const french = rows[i].children[0].innerText;
+        const english = rows[i].children[1].innerText;
+
+        let utterFrench = new SpeechSynthesisUtterance(french);
+        utterFrench.lang = "fr-FR";
+
+        let utterEnglish = new SpeechSynthesisUtterance(english);
+        utterEnglish.lang = "en-US";
+
+        // After both spoken, wait 2s then go next
+        utterEnglish.onend = () => {
+          setTimeout(() => {
             i++;
-            speakNext(); // move to next word
-          };
+            speakNext();
+          }, 2000);
+        };
 
-          speechSynthesis.speak(utterance);
-        } else {
-          // clear highlight when done
-          rows.forEach(r => r.classList.remove("highlight"));
-        }
+        speechSynthesis.speak(utterFrench);
+        speechSynthesis.speak(utterEnglish);
       }
 
-      // Cancel any ongoing speech before starting
-      speechSynthesis.cancel();
       speakNext();
-    }
+    });
   </script>
 </body>
 </html>
