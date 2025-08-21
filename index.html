@@ -8,115 +8,131 @@
     body {
       font-family: Arial, sans-serif;
       text-align: center;
-      background: #f0f8ff;
-      margin: 0;
       padding: 20px;
+      background: #f9f9f9;
     }
     h1 {
-      color: #2c3e50;
-      margin-bottom: 20px;
+      color: #333;
     }
-    .word-card {
-      background: #ffffff;
-      border-radius: 12px;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-      margin: 12px auto;
-      padding: 20px;
-      max-width: 500px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 18px;
+    table {
+      width: 100%;
+      max-width: 600px;
+      margin: 20px auto;
+      border-collapse: collapse;
+      background: white;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    }
+    th, td {
+      padding: 12px;
+      border: 1px solid #ddd;
+      text-align: center;
+    }
+    th {
+      background: #4CAF50;
+      color: white;
     }
     button {
-      background: #3498db;
+      padding: 12px 20px;
       border: none;
-      border-radius: 8px;
-      padding: 12px 18px;
+      background: #2196F3;
       color: white;
-      font-size: 18px;
+      font-size: 16px;
+      border-radius: 8px;
       cursor: pointer;
-      transition: 0.3s;
+      margin: 5px 0;
+      width: 100%;
     }
     button:hover {
-      background: #2980b9;
+      background: #0b7dda;
     }
-    @media (max-width: 600px) {
-      .word-card {
-        flex-direction: column;
-        font-size: 20px;
-      }
-      button {
-        width: 100%;
-        margin-top: 10px;
-        font-size: 20px;
-        padding: 15px;
-      }
+    #speakAll {
+      background: #FF5722;
+      margin-bottom: 20px;
     }
   </style>
 </head>
 <body>
-  <h1>📘 Vocab List</h1>
-  <div id="vocab-list"></div>
+  <h1>Vocab List</h1>
+  <button id="speakAll">🔊 Speak All</button>
+  <table id="vocabTable">
+    <thead>
+      <tr>
+        <th>French</th>
+        <th>English</th>
+        <th>Speak</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
 
   <script>
-    // Load vocab from Google Sheets (published CSV export)
-    const sheetUrl = "https://docs.google.com/spreadsheets/d/1whwTQDubf_im8SBxQGvI3diuAdWKwo5CYZwmpDNobEI/export?format=csv";
+    const sheetUrl = "https://docs.google.com/spreadsheets/d/1whwTQDubf_im8SBxQGvI3diuAdWKwo5CYZwmpDNobEI/gviz/tq?tqx=out:json";
 
-    let frenchVoice = null;
-    let englishVoice = null;
-
-    // Load available voices
-    function loadVoices() {
-      const voices = speechSynthesis.getVoices();
-      frenchVoice = voices.find(v => v.lang.startsWith("fr")) || null;
-      englishVoice = voices.find(v => v.lang.startsWith("en")) || null;
-    }
-
-    speechSynthesis.onvoiceschanged = loadVoices;
-    loadVoices();
-
-    // Speak helper
-    function speak(text, lang, voice) {
+    function speak(text, lang, callback) {
       return new Promise(resolve => {
-        const utter = new SpeechSynthesisUtterance(text);
-        utter.lang = lang;
-        if (voice) utter.voice = voice;
-        utter.onend = () => resolve();
-        speechSynthesis.speak(utter);
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = lang;
+        utterance.onend = () => {
+          if (callback) setTimeout(callback, Math.max(1500, text.length * 80)); // Adjust pause based on word length
+          resolve();
+        };
+        speechSynthesis.speak(utterance);
       });
     }
 
-    // Play French → wait → English
-    async function playWord(french, english) {
-      if (!frenchVoice || !englishVoice) loadVoices();
-      await speak(french, "fr-FR", frenchVoice);
-      await new Promise(r => setTimeout(r, Math.max(1000, french.length * 150)));
-      await speak(english, "en-US", englishVoice);
+    function createRow(french, english) {
+      const row = document.createElement("tr");
+
+      const frCell = document.createElement("td");
+      frCell.textContent = french;
+
+      const enCell = document.createElement("td");
+      enCell.textContent = english;
+
+      const btnCell = document.createElement("td");
+      const btn = document.createElement("button");
+      btn.textContent = "🔊 Speak";
+      btn.onclick = async () => {
+        await speak(french, "fr-FR");
+        await speak(english, "en-US");
+      };
+      btnCell.appendChild(btn);
+
+      row.appendChild(frCell);
+      row.appendChild(enCell);
+      row.appendChild(btnCell);
+
+      return row;
     }
 
-    // Fetch CSV from Sheets
-    async function loadSheet() {
-      const response = await fetch(sheetUrl);
-      const csv = await response.text();
-      const rows = csv.split("\n").slice(1); // skip header row
-      const container = document.getElementById("vocab-list");
+    async function fetchSheetData() {
+      const res = await fetch(sheetUrl);
+      const text = await res.text();
+      const json = JSON.parse(text.substr(47).slice(0, -2));
+      const rows = json.table.rows;
 
-      rows.forEach(row => {
-        const [french, english] = row.split(",");
+      const tableBody = document.querySelector("#vocabTable tbody");
+      tableBody.innerHTML = "";
+
+      rows.forEach(r => {
+        const french = r.c[0]?.v || "";
+        const english = r.c[1]?.v || "";
         if (french && english) {
-          const card = document.createElement("div");
-          card.className = "word-card";
-          card.innerHTML = `
-            <div><b>${french.trim()}</b> - ${english.trim()}</div>
-            <button onclick="playWord('${french.trim()}', '${english.trim()}')">▶️ Listen</button>
-          `;
-          container.appendChild(card);
+          tableBody.appendChild(createRow(french, english));
         }
       });
+
+      document.getElementById("speakAll").onclick = async () => {
+        for (let r of tableBody.rows) {
+          let fr = r.cells[0].innerText;
+          let en = r.cells[1].innerText;
+          await speak(fr, "fr-FR");
+          await speak(en, "en-US");
+        }
+      };
     }
 
-    loadSheet();
+    fetchSheetData();
   </script>
 </body>
 </html>
