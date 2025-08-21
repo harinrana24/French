@@ -1,5 +1,3 @@
-
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -32,7 +30,8 @@
   </table>
 
   <script>
-    const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR6eFbK6b1c9Z5rEOWGf9u-4nR0x1K6L8Zs4D7q/pub?output=csv"; // Replace with your published CSV URL
+    // Replace this with your published CSV link
+    const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR6eFbK6b1c9Z5rEOWGf9u-4nR0x1K6L8Zs4D7q/pub?output=csv";
 
     let voices = [];
     let frenchVoice = null;
@@ -46,7 +45,6 @@
     speechSynthesis.onvoiceschanged = loadVoices;
     loadVoices();
 
-    // Speak a single French word
     function speakWord(word) {
       const utter = new SpeechSynthesisUtterance(word);
       utter.lang = 'fr-FR';
@@ -54,7 +52,6 @@
       speechSynthesis.speak(utter);
     }
 
-    // Speak French then English
     function speakPair(french, english) {
       return new Promise(resolve => {
         const utter1 = new SpeechSynthesisUtterance(french);
@@ -70,7 +67,6 @@
       });
     }
 
-    // Speak all rows
     async function speakAll() {
       const rows = document.querySelectorAll("#vocabTable tbody tr");
       for(let row of rows){
@@ -80,7 +76,7 @@
       }
     }
 
-    // Load vocab from Google Sheet CSV
+    // Fetch vocab from CSV
     fetch(SHEET_CSV_URL)
       .then(res => res.text())
       .then(data => {
