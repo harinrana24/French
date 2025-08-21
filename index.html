@@ -1,30 +1,23 @@
+
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Vocab List</title>
+  <title>Vocab List - Desktop</title>
   <style>
-    body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
-    h1 { color: #4CAF50; }
-    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-    th, td { border: 1px solid #ddd; padding: 12px; text-align: center; }
-    th { background: #f4f4f4; }
-    button { 
-      padding: 10px 20px; 
-      border: none; 
-      border-radius: 8px; 
-      background: #4CAF50; 
-      color: white; 
-      font-size: 16px; 
-      cursor: pointer; 
-    }
-    button:hover { background: #45a049; }
-    .speakAll { margin: 20px 0; }
+    body { font-family: Arial, sans-serif; text-align: center; padding: 20px; background: #f0f4f8; }
+    h1 { color: #2a4d8f; margin-bottom: 20px; }
+    table { margin: auto; border-collapse: collapse; width: 80%; max-width: 800px; }
+    th, td { border: 1px solid #ccc; padding: 12px; text-align: center; font-size: 18px; }
+    th { background: #4CAF50; color: white; }
+    button { padding: 10px 18px; font-size: 16px; border: none; border-radius: 8px; cursor: pointer; background: #2196F3; color: white; }
+    button:hover { background: #1976D2; }
+    .speakAll { margin: 20px 0; background: #FF5722; }
   </style>
 </head>
 <body>
-  <h1>📖 Vocab List</h1>
+  <h1>📘 Vocab List</h1>
   <button class="speakAll" onclick="speakAll()">🔊 Speak All</button>
 
   <table id="vocabTable">
@@ -35,68 +28,77 @@
         <th>Action</th>
       </tr>
     </thead>
-    <tbody id="vocabBody"></tbody>
+    <tbody></tbody>
   </table>
 
   <script>
-    const sheetUrl = "https://docs.google.com/spreadsheets/d/1whwTQDubf_im8SBxQGvI3diuAdWKwo5CYZwmpDNobEI/gviz/tq?tqx=out:json";
-    let frenchVoice = null, englishVoice = null;
+    const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR6eFbK6b1c9Z5rEOWGf9u-4nR0x1K6L8Zs4D7q/pub?output=csv"; // Replace with your published CSV URL
 
-    // Load voices
+    let voices = [];
+    let frenchVoice = null;
+    let englishVoice = null;
+
     function loadVoices() {
-      const voices = speechSynthesis.getVoices();
-      frenchVoice = voices.find(v => v.lang.startsWith("fr")) || voices.find(v => v.name.toLowerCase().includes("french"));
-      englishVoice = voices.find(v => v.lang.startsWith("en")) || voices[0];
+      voices = speechSynthesis.getVoices();
+      frenchVoice = voices.find(v => v.lang.startsWith('fr')) || voices[0];
+      englishVoice = voices.find(v => v.lang.startsWith('en')) || voices[0];
     }
-
-    // Ensure voices are loaded
     speechSynthesis.onvoiceschanged = loadVoices;
     loadVoices();
 
-    // Fetch vocab from Google Sheets
-    fetch(sheetUrl)
-      .then(res => res.text())
-      .then(data => {
-        const json = JSON.parse(data.substr(47).slice(0, -2));
-        const rows = json.table.rows;
-        const tableBody = document.getElementById("vocabBody");
+    // Speak a single French word
+    function speakWord(word) {
+      const utter = new SpeechSynthesisUtterance(word);
+      utter.lang = 'fr-FR';
+      if(frenchVoice) utter.voice = frenchVoice;
+      speechSynthesis.speak(utter);
+    }
 
-        rows.forEach(row => {
-          const french = row.c[0]?.v || "";
-          const english = row.c[1]?.v || "";
-          const tr = document.createElement("tr");
-          tr.innerHTML = `
-            <td>${french}</td>
-            <td>${english}</td>
-            <td><button onclick="speakPair('${french}', '${english}')">▶️ Play</button></td>
-          `;
-          tableBody.appendChild(tr);
-        });
-      });
-
-    function speak(text, lang, voice) {
+    // Speak French then English
+    function speakPair(french, english) {
       return new Promise(resolve => {
-        const utter = new SpeechSynthesisUtterance(text);
-        utter.lang = lang;
-        if (voice) utter.voice = voice;
-        utter.onend = () => setTimeout(resolve, 1500); // 1.5 sec pause
-        speechSynthesis.speak(utter);
+        const utter1 = new SpeechSynthesisUtterance(french);
+        utter1.lang = 'fr-FR';
+        if(frenchVoice) utter1.voice = frenchVoice;
+
+        const utter2 = new SpeechSynthesisUtterance(english);
+        utter2.lang = 'en-US';
+        if(englishVoice) utter2.voice = englishVoice;
+
+        utter1.onend = () => { speechSynthesis.speak(utter2); utter2.onend = resolve; };
+        speechSynthesis.speak(utter1);
       });
     }
 
-    async function speakPair(french, english) {
-      await speak(french, "fr-FR", frenchVoice);
-      await speak(english, "en-US", englishVoice);
-    }
-
+    // Speak all rows
     async function speakAll() {
-      const rows = document.querySelectorAll("#vocabBody tr");
-      for (let row of rows) {
-        const french = row.children[0].innerText;
-        const english = row.children[1].innerText;
-        await speakPair(french, english);
+      const rows = document.querySelectorAll("#vocabTable tbody tr");
+      for(let row of rows){
+        const fr = row.cells[0].innerText;
+        const en = row.cells[1].innerText;
+        await speakPair(fr, en);
       }
     }
+
+    // Load vocab from Google Sheet CSV
+    fetch(SHEET_CSV_URL)
+      .then(res => res.text())
+      .then(data => {
+        const tbody = document.querySelector("#vocabTable tbody");
+        const lines = data.split("\n");
+        lines.forEach(line => {
+          const [french, english] = line.split(",");
+          if(french && english){
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+              <td>${french.trim()}</td>
+              <td>${english.trim()}</td>
+              <td><button onclick="speakWord('${french.trim()}')">🔊 Speak</button></td>
+            `;
+            tbody.appendChild(tr);
+          }
+        });
+      });
   </script>
 </body>
 </html>
