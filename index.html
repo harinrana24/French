@@ -3,116 +3,120 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>French Vocab Speaker</title>
+  <title>Vocab List</title>
   <style>
-    body { font-family: Arial, sans-serif; text-align: center; background: #f0f8ff; color: #333; padding: 10px; }
-    h1 { color: #4CAF50; margin: 20px 0; }
-    button { padding: 16px 24px; margin: 12px 0; background: #4CAF50; color: white; border: none; border-radius: 8px; font-size: 18px; cursor: pointer; }
-    button:hover { background: #45a049; }
-    table { border-collapse: collapse; width: 95%; max-width: 700px; margin: 20px auto; background: white; box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15); font-size: 18px; }
-    th, td { border: 1px solid #ddd; padding: 12px; text-align: center; }
-    th { background: #4CAF50; color: white; }
-    tr:nth-child(even) { background: #f9f9f9; }
-    tr.highlight { background: #ffeb3b !important; }
-    @media (max-width: 600px) { th, td { font-size: 16px; padding: 10px; } button { font-size: 16px; padding: 14px 20px; } }
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background: #f0f8ff;
+      margin: 0;
+      padding: 20px;
+    }
+    h1 {
+      color: #2c3e50;
+      margin-bottom: 20px;
+    }
+    .word-card {
+      background: #ffffff;
+      border-radius: 12px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+      margin: 12px auto;
+      padding: 20px;
+      max-width: 500px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 18px;
+    }
+    button {
+      background: #3498db;
+      border: none;
+      border-radius: 8px;
+      padding: 12px 18px;
+      color: white;
+      font-size: 18px;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+    button:hover {
+      background: #2980b9;
+    }
+    @media (max-width: 600px) {
+      .word-card {
+        flex-direction: column;
+        font-size: 20px;
+      }
+      button {
+        width: 100%;
+        margin-top: 10px;
+        font-size: 20px;
+        padding: 15px;
+      }
+    }
   </style>
 </head>
 <body>
-  <h1>Vocab List</h1>
-  <button id="speakAllBtn">Speak All</button>
-  <table id="vocabTable">
-    <thead><tr><th>Action</th><th>French</th><th>English</th></tr></thead>
-    <tbody></tbody>
-  </table>
+  <h1>📘 Vocab List</h1>
+  <div id="vocab-list"></div>
 
   <script>
-    let vocab = [];
-    let voices = [];
+    // Load vocab from Google Sheets (published CSV export)
+    const sheetUrl = "https://docs.google.com/spreadsheets/d/1whwTQDubf_im8SBxQGvI3diuAdWKwo5CYZwmpDNobEI/export?format=csv";
 
-    async function loadVocab() {
-      const sheetId = "1whwTQDubf_im8SBxQGvI3diuAdWKwo5CYZwmpDNobEI";
-      const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv`;
+    let frenchVoice = null;
+    let englishVoice = null;
 
-      try {
-        const res = await fetch(url);
-        const text = await res.text();
-        const rows = text.split("\n").slice(1);
-        vocab = rows.map(row => {
-          const cols = row.split(",").map(c => c.replace(/"/g, ""));
-          return { french: cols[0], english: cols[1], sentence: cols[2] };
-        }).filter(item => item.french && item.english);
-
-        const tbody = document.querySelector("#vocabTable tbody");
-        tbody.innerHTML = "";
-
-        vocab.forEach(item => {
-          const tr = document.createElement("tr");
-          tr.innerHTML = `<td><button>Speak</button></td><td>${item.french}</td><td>${item.english}</td>`;
-          const button = tr.querySelector("button");
-          button.onclick = () => speakPair(item.french, item.english, tr);
-          tbody.appendChild(tr);
-        });
-      } catch (err) {
-        alert("Error loading Google Sheet. Make sure it is public.");
-      }
+    // Load available voices
+    function loadVoices() {
+      const voices = speechSynthesis.getVoices();
+      frenchVoice = voices.find(v => v.lang.startsWith("fr")) || null;
+      englishVoice = voices.find(v => v.lang.startsWith("en")) || null;
     }
 
-    function getVoices() {
+    speechSynthesis.onvoiceschanged = loadVoices;
+    loadVoices();
+
+    // Speak helper
+    function speak(text, lang, voice) {
       return new Promise(resolve => {
-        let v = speechSynthesis.getVoices();
-        if (v.length) resolve(v);
-        else speechSynthesis.onvoiceschanged = () => resolve(speechSynthesis.getVoices());
+        const utter = new SpeechSynthesisUtterance(text);
+        utter.lang = lang;
+        if (voice) utter.voice = voice;
+        utter.onend = () => resolve();
+        speechSynthesis.speak(utter);
       });
     }
 
-    async function speakPair(french, english, row = null) {
-      if (voices.length === 0) voices = await getVoices();
-
-      const synth = window.speechSynthesis;
-
-      // Select a French voice
-      const frenchVoice = voices.find(v => v.lang.startsWith("fr") && v.name.toLowerCase().includes("fr")) ||
-                          voices.find(v => v.lang.startsWith("fr")) ||
-                          voices[0];
-
-      // Select an English voice
-      const englishVoice = voices.find(v => v.lang.startsWith("en")) || voices[0];
-
-      if (row) {
-        document.querySelectorAll("#vocabTable tbody tr").forEach(r => r.classList.remove("highlight"));
-        row.classList.add("highlight");
-      }
-
-      const frenchUtter = new SpeechSynthesisUtterance(french);
-      frenchUtter.lang = "fr-FR";
-      frenchUtter.voice = frenchVoice;
-      frenchUtter.onend = () => {
-        const englishUtter = new SpeechSynthesisUtterance(english);
-        englishUtter.lang = "en-US";
-        englishUtter.voice = englishVoice;
-        synth.speak(englishUtter);
-      };
-      synth.speak(frenchUtter);
+    // Play French → wait → English
+    async function playWord(french, english) {
+      if (!frenchVoice || !englishVoice) loadVoices();
+      await speak(french, "fr-FR", frenchVoice);
+      await new Promise(r => setTimeout(r, Math.max(1000, french.length * 150)));
+      await speak(english, "en-US", englishVoice);
     }
 
-    async function speakAll() {
-      if (voices.length === 0) voices = await getVoices();
+    // Fetch CSV from Sheets
+    async function loadSheet() {
+      const response = await fetch(sheetUrl);
+      const csv = await response.text();
+      const rows = csv.split("\n").slice(1); // skip header row
+      const container = document.getElementById("vocab-list");
 
-      for (let i = 0; i < vocab.length; i++) {
-        const row = document.querySelectorAll("#vocabTable tbody tr")[i];
-        speakPair(vocab[i].french, vocab[i].english, row);
-
-        // Dynamic pause: 700ms per word + 1.5 sec buffer
-        const frenchWords = vocab[i].french.split(" ").length;
-        const englishWords = vocab[i].english.split(" ").length;
-        const pauseTime = (frenchWords + englishWords) * 700 + 1500;
-        await new Promise(resolve => setTimeout(resolve, pauseTime));
-      }
+      rows.forEach(row => {
+        const [french, english] = row.split(",");
+        if (french && english) {
+          const card = document.createElement("div");
+          card.className = "word-card";
+          card.innerHTML = `
+            <div><b>${french.trim()}</b> - ${english.trim()}</div>
+            <button onclick="playWord('${french.trim()}', '${english.trim()}')">▶️ Listen</button>
+          `;
+          container.appendChild(card);
+        }
+      });
     }
 
-    document.getElementById("speakAllBtn").onclick = speakAll;
-
-    loadVocab();
+    loadSheet();
   </script>
 </body>
 </html>
