@@ -2,64 +2,69 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Vocab List</title>
   <style>
     body {
       font-family: Arial, sans-serif;
       text-align: center;
       padding: 20px;
-      background: #f9f9f9;
+      background: #f7f7f7;
     }
     h1 {
       color: #333;
+      margin-bottom: 20px;
     }
     table {
-      width: 100%;
-      max-width: 600px;
-      margin: 20px auto;
+      margin: auto;
       border-collapse: collapse;
-      background: white;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+      width: 95%;
+      max-width: 600px;
     }
     th, td {
-      padding: 12px;
       border: 1px solid #ddd;
+      padding: 15px;
       text-align: center;
+      font-size: 18px;
     }
     th {
       background: #4CAF50;
       color: white;
     }
+    tr:nth-child(even) {
+      background: #f2f2f2;
+    }
     button {
-      padding: 12px 20px;
+      padding: 12px 18px;
+      margin: 5px;
+      font-size: 18px;
       border: none;
+      border-radius: 10px;
+      cursor: pointer;
       background: #2196F3;
       color: white;
-      font-size: 16px;
-      border-radius: 8px;
-      cursor: pointer;
-      margin: 5px 0;
       width: 100%;
     }
     button:hover {
-      background: #0b7dda;
+      background: #1976D2;
     }
-    #speakAll {
+    .big-btn {
+      margin: 20px auto;
+      display: block;
+      width: 90%;
+      font-size: 20px;
       background: #FF5722;
-      margin-bottom: 20px;
     }
   </style>
 </head>
 <body>
-  <h1>Vocab List</h1>
-  <button id="speakAll">🔊 Speak All</button>
+  <h1>📘 Vocab List</h1>
+  <button class="big-btn" onclick="speakAll()">🔊 Speak All</button>
   <table id="vocabTable">
     <thead>
       <tr>
         <th>French</th>
         <th>English</th>
-        <th>Speak</th>
+        <th>Action</th>
       </tr>
     </thead>
     <tbody></tbody>
@@ -67,72 +72,69 @@
 
   <script>
     const sheetUrl = "https://docs.google.com/spreadsheets/d/1whwTQDubf_im8SBxQGvI3diuAdWKwo5CYZwmpDNobEI/gviz/tq?tqx=out:json";
+    let frenchVoice = null;
+    let englishVoice = null;
 
-    function speak(text, lang, callback) {
-      return new Promise(resolve => {
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = lang;
-        utterance.onend = () => {
-          if (callback) setTimeout(callback, Math.max(1500, text.length * 80)); // Adjust pause based on word length
-          resolve();
-        };
-        speechSynthesis.speak(utterance);
-      });
+    // Load voices properly (for mobile too)
+    function loadVoices() {
+      const voices = speechSynthesis.getVoices();
+      frenchVoice = voices.find(v => v.lang.startsWith("fr")) || null;
+      englishVoice = voices.find(v => v.lang.startsWith("en")) || null;
+    }
+    speechSynthesis.onvoiceschanged = loadVoices;
+    loadVoices();
+
+    function speak(text, lang, voice) {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = lang;
+      if (voice) utterance.voice = voice;
+      speechSynthesis.speak(utterance);
     }
 
-    function createRow(french, english) {
-      const row = document.createElement("tr");
-
-      const frCell = document.createElement("td");
-      frCell.textContent = french;
-
-      const enCell = document.createElement("td");
-      enCell.textContent = english;
-
-      const btnCell = document.createElement("td");
-      const btn = document.createElement("button");
-      btn.textContent = "🔊 Speak";
-      btn.onclick = async () => {
-        await speak(french, "fr-FR");
-        await speak(english, "en-US");
-      };
-      btnCell.appendChild(btn);
-
-      row.appendChild(frCell);
-      row.appendChild(enCell);
-      row.appendChild(btnCell);
-
-      return row;
+    function speakPair(fr, en) {
+      let delay = fr.length * 100 + 1000; // adjust pause by word length
+      speak(fr, "fr-FR", frenchVoice);
+      setTimeout(() => {
+        speak(en, "en-US", englishVoice);
+      }, delay);
     }
 
-    async function fetchSheetData() {
-      const res = await fetch(sheetUrl);
-      const text = await res.text();
-      const json = JSON.parse(text.substr(47).slice(0, -2));
-      const rows = json.table.rows;
-
-      const tableBody = document.querySelector("#vocabTable tbody");
-      tableBody.innerHTML = "";
-
-      rows.forEach(r => {
-        const french = r.c[0]?.v || "";
-        const english = r.c[1]?.v || "";
-        if (french && english) {
-          tableBody.appendChild(createRow(french, english));
+    function speakAll() {
+      const rows = document.querySelectorAll("#vocabTable tbody tr");
+      let i = 0;
+      function next() {
+        if (i < rows.length) {
+          const fr = rows[i].cells[0].textContent;
+          const en = rows[i].cells[1].textContent;
+          speakPair(fr, en);
+          i++;
+          setTimeout(next, fr.length * 100 + en.length * 100 + 2500);
         }
-      });
-
-      document.getElementById("speakAll").onclick = async () => {
-        for (let r of tableBody.rows) {
-          let fr = r.cells[0].innerText;
-          let en = r.cells[1].innerText;
-          await speak(fr, "fr-FR");
-          await speak(en, "en-US");
-        }
-      };
+      }
+      next();
     }
 
-    fetchSheetData();
+    // Load data from Google Sheet
+    fetch(sheetUrl)
+      .then(res => res.text())
+      .then(data => {
+        const json = JSON.parse(data.substr(47).slice(0, -2));
+        const rows = json.table.rows;
+        const tbody = document.querySelector("#vocabTable tbody");
+        rows.forEach(row => {
+          const fr = row.c[0]?.v || "";
+          const en = row.c[1]?.v || "";
+          if (fr && en) {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+              <td>${fr}</td>
+              <td>${en}</td>
+              <td><button onclick="speakPair('${fr}','${en}')">🔊 Speak</button></td>
+            `;
+            tbody.appendChild(tr);
+          }
+        });
+      });
   </script>
 </body>
 </html>
