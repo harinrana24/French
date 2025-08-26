@@ -4,136 +4,133 @@
   <meta charset="UTF-8">
   <title>Vocab List</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      text-align: center;
-      padding: 20px;
-      background: #f4f8fb;
-    }
-    h1 {
-      color: #2c3e50;
-      margin-bottom: 20px;
-    }
-    table {
-      margin: auto;
-      border-collapse: collapse;
-      width: 90%;
-      max-width: 800px;
-    }
-    th, td {
-      border: 1px solid #ccc;
-      padding: 12px;
-      text-align: center;
-    }
-    th {
-      background: #3498db;
-      color: white;
-    }
-    tr.highlight {
-      background: #f9e79f !important;
-    }
-    button {
-      background: #3498db;
-      color: white;
-      border: none;
-      padding: 10px 15px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 14px;
-    }
-    button:hover {
-      background: #2980b9;
-    }
-    #speakAllBtn {
-      margin-bottom: 20px;
-      font-size: 16px;
-      padding: 12px 20px;
-    }
+    body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
+    h1 { color: #333; }
+    table { margin: 20px auto; border-collapse: collapse; width: 80%; }
+    th, td { border: 1px solid #ccc; padding: 10px; }
+    th { background: #f4f4f4; }
+    button { margin: 5px; padding: 10px 15px; border: none; border-radius: 6px; cursor: pointer; }
+    .speak-btn { background: #4CAF50; color: white; }
+    .speak-all-btn { background: #2196F3; color: white; }
+    .pause-btn { background: #FF9800; color: white; }
+    .resume-btn { background: #9C27B0; color: white; }
+    .highlight { background: yellow; }
   </style>
 </head>
 <body>
+
   <h1>Vocab List</h1>
-  <button id="speakAllBtn">🔊 Speak All</button>
+  <div>
+    <button id="speakAll" class="speak-all-btn">🔊 Speak All</button>
+    <button id="pauseAll" class="pause-btn">⏸ Pause</button>
+    <button id="resumeAll" class="resume-btn">▶ Resume</button>
+  </div>
   <table id="vocabTable">
     <thead>
-      <tr>
-        <th>French</th>
-        <th>English</th>
-        <th>Action</th>
-      </tr>
+      <tr><th>French</th><th>English</th><th>Action</th></tr>
     </thead>
-    <tbody>
-      <!-- Rows will be filled dynamically -->
-    </tbody>
+    <tbody></tbody>
   </table>
 
-  <script>
-    // Fetch data from Google Sheets (using CSV export)
-    const sheetURL = "https://docs.google.com/spreadsheets/d/1whwTQDubf_im8SBxQGvI3diuAdWKwo5CYZwmpDNobEI/export?format=csv";
+<script>
+const sheetId = "1whwTQDubf_im8SBxQGvI3diuAdWKwo5CYZwmpDNobEI";
+const gid = "0"; // Sheet1
+const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&gid=${gid}`;
 
-    const tableBody = document.querySelector("#vocabTable tbody");
+let vocab = [];
+let currentIndex = 0;
+let isPaused = false;
 
-    // Load and display sheet data
-    fetch(sheetURL)
-      .then(res => res.text())
-      .then(csv => {
-        const rows = csv.split("\n").map(r => r.split(","));
-        rows.forEach((row, index) => {
-          if (row.length >= 2 && index > 0) { // skip header
-            const [french, english] = row;
-            const tr = document.createElement("tr");
-            tr.innerHTML = `
-              <td>${french}</td>
-              <td>${english}</td>
-              <td><button onclick="speakWord('${french}')">🔊 Speak</button></td>
-            `;
-            tableBody.appendChild(tr);
-          }
-        });
-      });
+// Fetch vocab
+fetch(url)
+  .then(res => res.text())
+  .then(data => {
+    const json = JSON.parse(data.substr(47).slice(0, -2));
+    vocab = json.table.rows.map(r => ({
+      french: r.c[0]?.v || "",
+      english: r.c[1]?.v || ""
+    }));
+    renderTable(vocab);
+  });
 
-    // Speak a single French word
-    function speakWord(word) {
-      let utter = new SpeechSynthesisUtterance(word);
-      utter.lang = "fr-FR"; // French voice
-      speechSynthesis.speak(utter);
-    }
+function renderTable(vocab) {
+  const tbody = document.querySelector("#vocabTable tbody");
+  tbody.innerHTML = "";
+  vocab.forEach((row, i) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${row.french}</td>
+      <td>${row.english}</td>
+      <td><button class="speak-btn" onclick="speakWord('${row.french}')">Speak</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
 
-    // Speak all words (French + English) with highlight
-    document.getElementById("speakAllBtn").addEventListener("click", () => {
-      const rows = tableBody.querySelectorAll("tr");
-      let i = 0;
+// Speak single word (only French)
+function speakWord(text) {
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.lang = "fr-FR";
+  speechSynthesis.speak(utter);
+}
 
-      function speakNext() {
-        if (i >= rows.length) return;
+// Speak All (French + English, 1 sec pause, highlight row)
+async function speakAll() {
+  currentIndex = 0;
+  isPaused = false;
+  await loopSpeak();
+}
 
-        // Highlight current row
-        rows.forEach(r => r.classList.remove("highlight"));
-        rows[i].classList.add("highlight");
+async function loopSpeak() {
+  const rows = document.querySelectorAll("#vocabTable tbody tr");
+  while (currentIndex < vocab.length && !isPaused) {
+    let row = vocab[currentIndex];
 
-        const french = rows[i].children[0].innerText;
-        const english = rows[i].children[1].innerText;
+    rows.forEach(r => r.classList.remove("highlight"));
+    rows[currentIndex].classList.add("highlight");
 
-        let utterFrench = new SpeechSynthesisUtterance(french);
-        utterFrench.lang = "fr-FR";
+    await speakWithPromise(row.french, "fr-FR");
+    await delay(1000);
+    await speakWithPromise(row.english, "en-US");
+    await delay(1000);
 
-        let utterEnglish = new SpeechSynthesisUtterance(english);
-        utterEnglish.lang = "en-US";
+    currentIndex++;
+  }
+}
 
-        // After both spoken, wait 2s then go next
-        utterEnglish.onend = () => {
-          setTimeout(() => {
-            i++;
-            speakNext();
-          }, 2000);
-        };
+function speakWithPromise(text, lang) {
+  return new Promise(resolve => {
+    let utter = new SpeechSynthesisUtterance(text);
+    utter.lang = lang;
+    utter.onend = resolve;
+    speechSynthesis.speak(utter);
+  });
+}
 
-        speechSynthesis.speak(utterFrench);
-        speechSynthesis.speak(utterEnglish);
-      }
+function delay(ms) {
+  return new Promise(res => setTimeout(res, ms));
+}
 
-      speakNext();
-    });
-  </script>
+// Pause
+function pauseAll() {
+  isPaused = true;
+  speechSynthesis.pause();
+}
+
+// Resume
+function resumeAll() {
+  if (isPaused) {
+    isPaused = false;
+    speechSynthesis.resume();
+    loopSpeak();
+  }
+}
+
+// Event listeners
+document.getElementById("speakAll").addEventListener("click", speakAll);
+document.getElementById("pauseAll").addEventListener("click", pauseAll);
+document.getElementById("resumeAll").addEventListener("click", resumeAll);
+
+</script>
 </body>
 </html>
