@@ -1,167 +1,133 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>French Vocabulary Trainer</title>
-<style>
-body { font-family: Arial; margin:20px; }
-table { border-collapse: collapse; width: 100%; margin-top: 10px; }
-th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
-th { background-color: #f4f4f4; }
-.highlight { background-color: yellow; }
-button { margin: 5px; padding: 8px 12px; border: none; border-radius: 6px; cursor: pointer; }
-.btn-primary { background-color: #4CAF50; color:white; }
-.btn-secondary { background-color: #008CBA; color:white; }
-.btn-danger { background-color: #f44336; color:white; }
-</style>
+  <meta charset="UTF-8">
+  <title>French Learning App</title>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; background: #f8f9fa; }
+    h1 { color: #333; }
+    button { 
+      margin: 5px; padding: 10px 15px; border: none; border-radius: 8px; 
+      cursor: pointer; font-weight: bold; color: white; 
+    }
+    .active { box-shadow: 0 0 10px rgba(0,0,0,0.3); }
+    .nav { background:#007bff; } 
+    .resume { background:#28a745; } 
+    .pause { background:#ffc107; color:black; } 
+    .stop { background:#dc3545; } 
+    .speak { background:#17a2b8; } 
+    table { margin: 20px auto; border-collapse: collapse; width: 70%; }
+    th, td { border: 1px solid #ddd; padding: 10px; }
+    tr.highlight { background: #ffeeba; }
+  </style>
 </head>
 <body>
-<h2>French Vocabulary Trainer</h2>
+  <h1>French Vocabulary Trainer</h1>
 
-<div>
-<button onclick="showSheet('Sheet1', this)" class="btn-primary active">Sheet 1</button>
-<button onclick="showSheet('Sheet2', this)" class="btn-primary">Sheet 2</button>
-</div>
+  <div>
+    <button class="nav active" onclick="loadSheet('Sheet1', this)">Vocabulary</button>
+    <button class="nav" onclick="loadSheet('Sheet2', this)">Common Things</button>
+  </div>
 
-<div id="sheet1" style="display:none;">
-<h3>Sheet 1</h3>
-<button onclick="speakAll(sheet1Data)" class="btn-secondary">Speak All</button>
-<button onclick="togglePause()" class="btn-secondary">Pause/Resume</button>
-<button onclick="speakAndDownload(sheet1Data)" class="btn-danger">Speak & Download</button>
-<table id="table1"></table>
-</div>
+  <div>
+    <button class="speak" onclick="speakAll()">🔊 Speak All</button>
+    <button class="pause" onclick="pauseSpeech()">⏸ Pause</button>
+    <button class="resume" onclick="resumeSpeech()">▶ Resume</button>
+    <button class="stop" onclick="stopSpeech()">⏹ Stop</button>
+  </div>
 
-<div id="sheet2" style="display:none;">
-<h3>Sheet 2</h3>
-<button onclick="speakAll(sheet2Data)" class="btn-secondary">Speak All</button>
-<button onclick="togglePause()" class="btn-secondary">Pause/Resume</button>
-<button onclick="speakAndDownload(sheet2Data)" class="btn-danger">Speak & Download</button>
-<table id="table2"></table>
-</div>
+  <table id="vocabTable">
+    <thead>
+      <tr><th>French</th><th>English</th><th>Action</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
 
 <script>
-const sheetId = "1whwTQDubf_im8SBxQGvI3diuAdWKwo5CYZwmpDNobEI";
-let sheet1Data = [], sheet2Data = [];
-let currentUtterance=null, isPaused=false;
+const sheetId = "1whwTQDubf_im8SBxQGvI3diuAdWKwo5CYZwmpDNobEI"; // your sheet
+let currentData = [];
+let speakingIndex = 0;
+let isSpeakingAll = false;
 
-// Load sheet data from Google Sheet
-async function loadSheet(sheetName){
-    const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=${sheetName}`;
-    const res = await fetch(url);
-    const text = await res.text();
-    const json = JSON.parse(text.substr(47).slice(0,-2));
-    const data = json.table.rows.map(r => ({
-        french: r.c[0]?.v || "",
-        english: r.c[1]?.v || ""
-    }));
-    return data;
+async function loadSheet(sheetName, btn){
+  document.querySelectorAll(".nav").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+
+  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=${sheetName}`;
+  const res = await fetch(url);
+  const text = await res.text();
+  const json = JSON.parse(text.substr(47).slice(0,-2));
+
+  currentData = json.table.rows.map(r => ({
+    fr: r.c[0]?.v || "", en: r.c[1]?.v || ""
+  }));
+  renderTable();
 }
 
-// Show sheet
-async function showSheet(sheetName, btn){
-    document.querySelectorAll("button.btn-primary").forEach(b=>b.classList.remove("active"));
-    btn.classList.add("active");
-
-    let data;
-    if(sheetName==="Sheet1"){
-        if(sheet1Data.length===0) sheet1Data = await loadSheet("Sheet1");
-        data = sheet1Data;
-        document.getElementById("sheet1").style.display="block";
-        document.getElementById("sheet2").style.display="none";
-        populateTable("table1", sheet1Data, "sheet1");
-    }else{
-        if(sheet2Data.length===0) sheet2Data = await loadSheet("Sheet2");
-        data = sheet2Data;
-        document.getElementById("sheet2").style.display="block";
-        document.getElementById("sheet1").style.display="none";
-        populateTable("table2", sheet2Data, "sheet2");
-    }
+function renderTable(){
+  const tbody = document.querySelector("#vocabTable tbody");
+  tbody.innerHTML = "";
+  currentData.forEach((row,i)=>{
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${row.fr}</td>
+      <td>${row.en}</td>
+      <td><button class="speak" onclick="speakRow(${i})">Speak</button></td>`;
+    tbody.appendChild(tr);
+  });
 }
 
-// Populate table
-function populateTable(tableId, data, sheetDiv){
-    const table = document.getElementById(tableId);
-    table.innerHTML="<tr><th>French</th><th>English</th><th>Speak</th></tr>";
-    data.forEach((row, idx)=>{
-        const tr = document.createElement("tr");
-        tr.id = `${sheetDiv}-row-${idx}`;
-        tr.innerHTML=`<td>${row.french}</td><td>${row.english}</td>
-        <td><button class="btn-secondary" onclick="speakRow('${sheetDiv}', ${idx})">Speak</button></td>`;
-        table.appendChild(tr);
-    });
+function speakRow(i){
+  stopSpeech();
+  const row = currentData[i];
+  const u = new SpeechSynthesisUtterance(row.fr);
+  u.lang = "fr-FR";
+  speechSynthesis.speak(u);
 }
 
-// Speak row
-function speakRow(sheetDiv, idx){
-    const data = sheetDiv==="sheet1"?sheet1Data:sheet2Data;
-    if(!data[idx]) return;
-    const utter = new SpeechSynthesisUtterance(data[idx].french);
-    utter.lang="fr-FR";
-    speechSynthesis.speak(utter);
+function speakAll(){
+  stopSpeech();
+  isSpeakingAll = true;
+  speakingIndex = 0;
+  speakNext();
 }
 
-// Speak all
-function speakAll(data){
-    resetHighlights();
-    let idx=0;
-    function speakNext(){
-        if(idx>=data.length) return;
-        const rowId = `${document.getElementById("sheet1").style.display==="block"?"sheet1":"sheet2"}-row-${idx}`;
-        document.querySelectorAll("tr").forEach(tr=>tr.classList.remove("highlight"));
-        document.getElementById(rowId).classList.add("highlight");
-        const utter = new SpeechSynthesisUtterance(`${data[idx].french}, ${data[idx].english}`);
-        utter.lang="fr-FR";
-        utter.onend = ()=>{idx++; setTimeout(speakNext,1000);}
-        speechSynthesis.speak(utter);
-    }
-    speakNext();
+function speakNext(){
+  if(!isSpeakingAll || speakingIndex >= currentData.length) return;
+  const row = currentData[speakingIndex];
+  const tbody = document.querySelector("#vocabTable tbody").rows;
+  [...tbody].forEach(r=>r.classList.remove("highlight"));
+  tbody[speakingIndex].classList.add("highlight");
+
+  const uFr = new SpeechSynthesisUtterance(row.fr);
+  uFr.lang = "fr-FR";
+  uFr.onend = ()=> {
+    setTimeout(()=>{
+      const uEn = new SpeechSynthesisUtterance(row.en);
+      uEn.lang = "en-US";
+      uEn.onend = ()=> {
+        setTimeout(()=>{
+          speakingIndex++;
+          speakNext();
+        }, 1000); // 1 sec pause
+      };
+      speechSynthesis.speak(uEn);
+    }, 1000); // pause before English
+  };
+  speechSynthesis.speak(uFr);
 }
 
-// Pause/resume
-function togglePause(){
-    if(!isPaused){speechSynthesis.pause(); isPaused=true;}
-    else{speechSynthesis.resume(); isPaused=false;}
-}
-
-function resetHighlights(){
-    document.querySelectorAll("tr").forEach(tr=>tr.classList.remove("highlight"));
-}
-
-// Speak & Download with row highlighting and 1s pause
-async function speakAndDownload(data){
-    resetHighlights();
-    let idx=0;
-    let chunks=[];
-    const audioContext = new AudioContext();
-    const dest = audioContext.createMediaStreamDestination();
-    const mediaRecorder = new MediaRecorder(dest.stream);
-
-    mediaRecorder.ondataavailable = e=>chunks.push(e.data);
-    mediaRecorder.onstop = ()=>{
-        const blob = new Blob(chunks,{type:"audio/mp3"});
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download="translations.mp3";
-        a.click();
-    };
-    mediaRecorder.start();
-
-    function speakNext(){
-        if(idx>=data.length){ setTimeout(()=>mediaRecorder.stop(),500); return; }
-        const rowId = `${document.getElementById("sheet1").style.display==="block"?"sheet1":"sheet2"}-row-${idx}`;
-        document.querySelectorAll("tr").forEach(tr=>tr.classList.remove("highlight"));
-        document.getElementById(rowId).classList.add("highlight");
-        const utter = new SpeechSynthesisUtterance(`${data[idx].french}, ${data[idx].english}`);
-        utter.lang="fr-FR";
-        utter.onend = ()=>{idx++; setTimeout(speakNext,1000);}
-        speechSynthesis.speak(utter);
-    }
-    speakNext();
+function pauseSpeech(){ speechSynthesis.pause(); }
+function resumeSpeech(){ speechSynthesis.resume(); }
+function stopSpeech(){
+  isSpeakingAll = false;
+  speechSynthesis.cancel();
+  document.querySelectorAll("tr").forEach(r=>r.classList.remove("highlight"));
 }
 
 // Load Sheet1 by default
-showSheet("Sheet1", document.querySelector("button.btn-primary"));
+loadSheet("Sheet1", document.querySelector(".nav"));
 </script>
 </body>
 </html>
+
