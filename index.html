@@ -2,165 +2,132 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>French Vocab Trainer</title>
+  <title>French Learning App</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      text-align: center;
-      background: #f0f8ff;
-      padding: 20px;
+    body { font-family: Arial, sans-serif; text-align: center; background: #f8f9fa; }
+    h1 { color: #333; }
+    button { 
+      margin: 5px; padding: 10px 15px; border: none; border-radius: 8px; 
+      cursor: pointer; font-weight: bold; color: white; 
     }
-    h1 {
-      color: #2c3e50;
-    }
-    nav {
-      margin-bottom: 20px;
-    }
-    nav a {
-      margin: 0 10px;
-      text-decoration: none;
-      font-weight: bold;
-      color: #2980b9;
-      cursor: pointer;
-    }
-    table {
-      margin: 20px auto;
-      border-collapse: collapse;
-      width: 80%;
-      box-shadow: 0px 4px 10px rgba(0,0,0,0.1);
-    }
-    th, td {
-      padding: 12px;
-      text-align: center;
-      border: 1px solid #ddd;
-    }
-    th {
-      background-color: #3498db;
-      color: white;
-    }
-    tr:nth-child(even) {
-      background-color: #f9f9f9;
-    }
-    tr.highlight {
-      background-color: #ffeaa7 !important;
-    }
-    button {
-      padding: 6px 12px;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-      color: white;
-      font-weight: bold;
-    }
-    .speak-btn { background-color: #27ae60; }
-    .speak-all-btn { background-color: #e67e22; }
-    .pause-btn { background-color: #c0392b; }
-    .resume-btn { background-color: #8e44ad; }
+    .active { box-shadow: 0 0 10px rgba(0,0,0,0.3); }
+    .nav { background:#007bff; } 
+    .resume { background:#28a745; } 
+    .pause { background:#ffc107; color:black; } 
+    .stop { background:#dc3545; } 
+    .speak { background:#17a2b8; } 
+    table { margin: 20px auto; border-collapse: collapse; width: 70%; }
+    th, td { border: 1px solid #ddd; padding: 10px; }
+    tr.highlight { background: #ffeeba; }
   </style>
 </head>
 <body>
   <h1>French Vocabulary Trainer</h1>
-  <nav>
-    <a onclick="loadSheet(1)">Main List</a> |
-    <a onclick="loadSheet(2)">Common Things</a>
-  </nav>
-  
+
   <div>
-    <button class="speak-all-btn" onclick="speakAll()">🔊 Speak All</button>
-    <button class="pause-btn" onclick="pauseAll()">⏸ Pause</button>
-    <button class="resume-btn" onclick="resumeAll()">▶ Resume</button>
+    <button class="nav active" onclick="loadSheet('Sheet1', this)">Vocabulary</button>
+    <button class="nav" onclick="loadSheet('Sheet2', this)">Common Things</button>
+  </div>
+
+  <div>
+    <button class="speak" onclick="speakAll()">🔊 Speak All</button>
+    <button class="pause" onclick="pauseSpeech()">⏸ Pause</button>
+    <button class="resume" onclick="resumeSpeech()">▶ Resume</button>
+    <button class="stop" onclick="stopSpeech()">⏹ Stop</button>
   </div>
 
   <table id="vocabTable">
     <thead>
-      <tr>
-        <th>French</th>
-        <th>English</th>
-        <th>Speak</th>
-      </tr>
+      <tr><th>French</th><th>English</th><th>Action</th></tr>
     </thead>
     <tbody></tbody>
   </table>
 
-  <script>
-    const sheetID = "1whwTQDubf_im8SBxQGvI3diuAdWKwo5CYZwmpDNobEI";
-    let currentData = [];
-    let currentRow = 0;
-    let speaking = false;
+<script>
+const sheetId = "1whwTQDubf_im8SBxQGvI3diuAdWKwo5CYZwmpDNobEI"; // your sheet
+let currentData = [];
+let speakingIndex = 0;
+let isSpeakingAll = false;
 
-    async function loadSheet(sheetIndex = 1) {
-      let url = `https://docs.google.com/spreadsheets/d/${sheetID}/gviz/tq?tqx=out:json&sheet=Sheet${sheetIndex}`;
-      let response = await fetch(url);
-      let text = await response.text();
-      let json = JSON.parse(text.substr(47).slice(0, -2));
-      
-      let table = document.querySelector("#vocabTable tbody");
-      table.innerHTML = "";
-      currentData = json.table.rows.map(r => [
-        r.c[0]?.v?.replace(/"/g, '') || "",
-        r.c[1]?.v?.replace(/"/g, '') || ""
-      ]);
+async function loadSheet(sheetName, btn){
+  document.querySelectorAll(".nav").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
 
-      currentData.forEach((row, index) => {
-        let tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td>${row[0]}</td>
-          <td>${row[1]}</td>
-          <td><button class="speak-btn" onclick="speakWord('${row[0]}')">Speak</button></td>
-        `;
-        table.appendChild(tr);
-      });
-    }
+  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=${sheetName}`;
+  const res = await fetch(url);
+  const text = await res.text();
+  const json = JSON.parse(text.substr(47).slice(0,-2));
 
-    function speakWord(word) {
-      let utterance = new SpeechSynthesisUtterance(word);
-      utterance.lang = "fr-FR";
-      speechSynthesis.speak(utterance);
-    }
+  currentData = json.table.rows.map(r => ({
+    fr: r.c[0]?.v || "", en: r.c[1]?.v || ""
+  }));
+  renderTable();
+}
 
-    async function speakAll() {
-      if (speaking) return;
-      speaking = true;
-      currentRow = 0;
-      readRow();
-    }
+function renderTable(){
+  const tbody = document.querySelector("#vocabTable tbody");
+  tbody.innerHTML = "";
+  currentData.forEach((row,i)=>{
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${row.fr}</td>
+      <td>${row.en}</td>
+      <td><button class="speak" onclick="speakRow(${i})">Speak</button></td>`;
+    tbody.appendChild(tr);
+  });
+}
 
-    function readRow() {
-      if (currentRow >= currentData.length) { speaking = false; return; }
-      let [fr, en] = currentData[currentRow];
+function speakRow(i){
+  stopSpeech();
+  const row = currentData[i];
+  const u = new SpeechSynthesisUtterance(row.fr);
+  u.lang = "fr-FR";
+  speechSynthesis.speak(u);
+}
 
-      // highlight row
-      document.querySelectorAll("#vocabTable tbody tr").forEach(tr => tr.classList.remove("highlight"));
-      document.querySelectorAll("#vocabTable tbody tr")[currentRow]?.classList.add("highlight");
+function speakAll(){
+  stopSpeech();
+  isSpeakingAll = true;
+  speakingIndex = 0;
+  speakNext();
+}
 
-      let utter1 = new SpeechSynthesisUtterance(fr);
-      utter1.lang = "fr-FR";
-      let utter2 = new SpeechSynthesisUtterance(en);
-      utter2.lang = "en-US";
+function speakNext(){
+  if(!isSpeakingAll || speakingIndex >= currentData.length) return;
+  const row = currentData[speakingIndex];
+  const tbody = document.querySelector("#vocabTable tbody").rows;
+  [...tbody].forEach(r=>r.classList.remove("highlight"));
+  tbody[speakingIndex].classList.add("highlight");
 
-      utter2.onend = () => {
-        currentRow++;
-        setTimeout(readRow, 1000); // 1 sec pause
+  const uFr = new SpeechSynthesisUtterance(row.fr);
+  uFr.lang = "fr-FR";
+  uFr.onend = ()=> {
+    setTimeout(()=>{
+      const uEn = new SpeechSynthesisUtterance(row.en);
+      uEn.lang = "en-US";
+      uEn.onend = ()=> {
+        setTimeout(()=>{
+          speakingIndex++;
+          speakNext();
+        }, 1000); // 1 sec pause
       };
+      speechSynthesis.speak(uEn);
+    }, 1000); // pause before English
+  };
+  speechSynthesis.speak(uFr);
+}
 
-      speechSynthesis.speak(utter1);
-      speechSynthesis.speak(utter2);
-    }
+function pauseSpeech(){ speechSynthesis.pause(); }
+function resumeSpeech(){ speechSynthesis.resume(); }
+function stopSpeech(){
+  isSpeakingAll = false;
+  speechSynthesis.cancel();
+  document.querySelectorAll("tr").forEach(r=>r.classList.remove("highlight"));
+}
 
-    function pauseAll() {
-      if (speechSynthesis.speaking) {
-        speechSynthesis.pause();
-      }
-    }
-
-    function resumeAll() {
-      if (speechSynthesis.paused) {
-        speechSynthesis.resume();
-      }
-    }
-
-    // load default sheet
-    loadSheet(1);
-  </script>
+// Load Sheet1 by default
+loadSheet("Sheet1", document.querySelector(".nav"));
+</script>
 </body>
 </html>
+
