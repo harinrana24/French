@@ -4,194 +4,128 @@
   <meta charset="UTF-8">
   <title>French Vocabulary Trainer</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      padding: 20px;
-      text-align: center;
-    }
-    nav {
-      margin-bottom: 20px;
-    }
-    nav button {
-      margin: 5px;
-      padding: 10px 20px;
-      font-size: 16px;
-      border: none;
-      border-radius: 8px;
-      background-color: #4CAF50;
-      color: white;
-      cursor: pointer;
-    }
-    nav button:hover {
-      background-color: #45a049;
-    }
-    table {
-      width: 80%;
-      margin: 20px auto;
-      border-collapse: collapse;
-    }
-    th, td {
-      border: 1px solid #ccc;
-      padding: 12px;
-      text-align: center;
-      font-size: 18px;
-    }
-    tr.highlight {
-      background-color: #ffff99;
-    }
-    button.speak-btn {
-      padding: 6px 12px;
-      font-size: 14px;
-      border-radius: 5px;
-      border: none;
-      background: #2196F3;
-      color: white;
-      cursor: pointer;
-    }
-    button.speak-btn:hover {
-      background: #0b7dda;
-    }
-    .controls {
-      margin: 20px;
-    }
-    .controls button {
-      padding: 10px 18px;
-      font-size: 16px;
-      border: none;
-      border-radius: 8px;
-      margin: 5px;
-      cursor: pointer;
-    }
-    .play-btn { background: #4CAF50; color: white; }
-    .pause-btn { background: #f44336; color: white; }
+    body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
+    table { margin: 20px auto; border-collapse: collapse; width: 90%; max-width: 600px; }
+    th, td { border: 1px solid #ccc; padding: 10px; text-align: center; }
+    button { padding: 8px 12px; margin: 5px; font-size: 14px; }
+    .highlight { background: yellow; }
+    .nav { margin-bottom: 20px; }
+    .nav button { font-size: 16px; padding: 10px 15px; }
   </style>
 </head>
 <body>
-
   <h1>French Vocabulary Trainer</h1>
-
-  <nav>
-    <button onclick="loadSheet('Vocabulary!A:B')">Vocabulary</button>
-    <button onclick="loadSheet('Common Things!A:B')">Common Things</button>
-  </nav>
-
-  <div class="controls">
-    <button class="play-btn" onclick="speakAll()">▶ Speak All</button>
-    <button class="pause-btn" onclick="pauseResume()">⏯ Pause/Resume</button>
+  <div class="nav">
+    <button onclick="loadSheet('Sheet1')">Basic Words</button>
+    <button onclick="loadSheet('Sheet2')">Common Things</button>
   </div>
-
+  <div>
+    <button onclick="speakAll()">🔊 Speak All</button>
+    <button onclick="togglePause()">
+      ⏸ Pause / ▶ Resume
+    </button>
+  </div>
   <table id="vocabTable">
     <thead>
-      <tr>
-        <th>French</th>
-        <th>English</th>
-        <th>Speak</th>
-      </tr>
+      <tr><th>French</th><th>English</th><th>Action</th></tr>
     </thead>
     <tbody></tbody>
   </table>
 
   <script>
-    const sheetId = "1whwTQDubf_im8SBxQGvI3diuAdWKwo5CYZwmpDNobEI";
+    const sheetId = "1whwTQDubf_im8SBxQGvI3diuAdWKwo5CYZwmpDNobEI"; // your sheet ID
+    const apiKey = "AIzaSyDUMMY"; // replace with your API key
     let voices = [];
-    let isPaused = false;
-    let currentIndex = 0;
-    let currentData = [];
+    let synth = window.speechSynthesis;
+    let speaking = false;
+    let paused = false;
+    let queue = [];
 
     function loadVoices() {
-      voices = window.speechSynthesis.getVoices();
+      voices = synth.getVoices();
     }
     window.speechSynthesis.onvoiceschanged = loadVoices;
 
-    async function loadSheet(sheetName) {
-      const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=${sheetName}`;
-      const res = await fetch(url);
-      const text = await res.text();
-      const json = JSON.parse(text.substr(47).slice(0, -2));
-      const rows = json.table.rows.map(r => [r.c[0]?.v, r.c[1]?.v]);
+    function getVoice(lang) {
+      return voices.find(v => v.lang.startsWith(lang)) || voices[0];
+    }
 
+    async function loadSheet(sheetName) {
+      const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${sheetName}?key=${apiKey}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      const rows = data.values.slice(1); // skip header
       const tbody = document.querySelector("#vocabTable tbody");
       tbody.innerHTML = "";
       rows.forEach((row, i) => {
-        const tr = document.createElement("tr");
+        let tr = document.createElement("tr");
         tr.innerHTML = `
           <td>${row[0]}</td>
           <td>${row[1]}</td>
-          <td><button class="speak-btn" onclick="speakWord('${row[0]}')">🔊</button></td>
+          <td><button onclick="speakWord('${row[0]}')">🔊 Speak</button></td>
         `;
         tbody.appendChild(tr);
       });
-      currentData = rows;
     }
 
     function speakWord(word) {
-      const utter = new SpeechSynthesisUtterance(word);
-      utter.lang = "fr-FR";
-      const frenchVoice = voices.find(v => v.lang.startsWith("fr"));
-      if (frenchVoice) utter.voice = frenchVoice;
-      speechSynthesis.speak(utter);
+      let utter = new SpeechSynthesisUtterance(word);
+      utter.voice = getVoice("fr");
+      synth.cancel();
+      synth.speak(utter);
     }
 
     async function speakAll() {
-      if (speechSynthesis.speaking) speechSynthesis.cancel();
-      isPaused = false;
-      currentIndex = 0;
-      for (let i = 0; i < currentData.length; i++) {
-        if (isPaused) break;
-        currentIndex = i;
-
-        highlightRow(i);
-
-        // Speak French
-        await speakAsync(currentData[i][0], "fr-FR");
-        await delay(1000);
-
-        // Speak English
-        await speakAsync(currentData[i][1], "en-US");
-        await delay(1000);
-      }
-      removeHighlight();
-    }
-
-    function pauseResume() {
-      if (speechSynthesis.speaking) {
-        if (!isPaused) {
-          speechSynthesis.pause();
-          isPaused = true;
-        } else {
-          speechSynthesis.resume();
-          isPaused = false;
-        }
-      }
-    }
-
-    function speakAsync(text, lang) {
-      return new Promise(resolve => {
-        const utter = new SpeechSynthesisUtterance(text);
-        utter.lang = lang;
-        const voice = voices.find(v => v.lang.startsWith(lang.split('-')[0]));
-        if (voice) utter.voice = voice;
-        utter.onend = resolve;
-        speechSynthesis.speak(utter);
+      if (speaking) return;
+      speaking = true;
+      paused = false;
+      queue = [];
+      let rows = document.querySelectorAll("#vocabTable tbody tr");
+      rows.forEach(r => {
+        let fr = r.cells[0].innerText;
+        let en = r.cells[1].innerText;
+        queue.push({ fr, en, row: r });
       });
+      playQueue();
     }
 
-    function highlightRow(index) {
-      removeHighlight();
-      const rows = document.querySelectorAll("#vocabTable tbody tr");
-      if (rows[index]) rows[index].classList.add("highlight");
+    function playQueue() {
+      if (!queue.length || paused) {
+        speaking = false;
+        return;
+      }
+      let { fr, en, row } = queue.shift();
+      highlight(row);
+      let u1 = new SpeechSynthesisUtterance(fr);
+      u1.voice = getVoice("fr");
+      let u2 = new SpeechSynthesisUtterance(en);
+      u2.voice = getVoice("en");
+      u1.onend = () => setTimeout(() => synth.speak(u2), 1000); // 1s pause
+      u2.onend = () => setTimeout(playQueue, 1000);
+      synth.speak(u1);
     }
 
-    function removeHighlight() {
-      document.querySelectorAll("#vocabTable tbody tr").forEach(r => r.classList.remove("highlight"));
+    function highlight(row) {
+      document.querySelectorAll("#vocabTable tr").forEach(r => r.classList.remove("highlight"));
+      row.classList.add("highlight");
     }
 
-    function delay(ms) {
-      return new Promise(res => setTimeout(res, ms));
+    function togglePause() {
+      if (!speaking) return;
+      if (!paused) {
+        synth.pause();
+        paused = true;
+      } else {
+        synth.resume();
+        paused = false;
+        playQueue();
+      }
     }
 
-    // Load Vocabulary by default
-    loadSheet("Vocabulary!A:B");
+    // Load first sheet on start
+    loadSheet("Sheet1");
   </script>
 </body>
 </html>
+
+
